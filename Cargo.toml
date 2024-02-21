@@ -1,2 +1,3 @@
 [workspace]
 members = ["modules/fast-release"]
+resolver = "2"
