@@ -4,6 +4,7 @@
 # File Extensions
 
 # Folders
-*target
+/!Old
+/target
 
 # Files
