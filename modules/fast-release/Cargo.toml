@@ -1,14 +1,15 @@
 [package]
 name = "fast-release"
-version = "0.0.0-beta.0"
+version = "0.0.1"
 edition = "2021"
 
-[profile.release]
-opt-level = 3
-
 [dependencies]
-colored = "2.1.0"
-git2 = "0.18.1"
+commonlib = { git = "https://github.com/toolbisoftware/commonlib-rs", version = "0.0.1", features = [
+  "logger",
+] }
+env_logger = "0.11.2"
+lazy_static = "1.4.0"
 log = "0.4.20"
-serde = { version = "1.0.193", features = ["derive"] }
-serde_yaml = "0.9.29"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_yaml = "0.9.32"
+tracing = "0.1.40"
