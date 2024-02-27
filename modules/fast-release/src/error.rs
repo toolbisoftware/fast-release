@@ -7,6 +7,7 @@ use tracing::{error, warn};
 #[derive(Debug)]
 pub struct FastReleaseError<'a> {
   pub message: &'a str,
+  pub category: Option<&'a str>,
   pub error: Option<Error>,
 }
 
@@ -25,13 +26,7 @@ impl std::fmt::Display for FastReleaseError<'_> {
 
 pub fn throw_error(error: FastReleaseError) {
   error!("An error has occurred:");
-
-  if let Some(content) = &error.error {
-    error!(message = format!("{}", error.message), error = ?content);
-  } else {
-    error!(message = format!("{}", error.message));
-  }
-
+  error!(message = error.message, category = error.category, error = ?error.error);
   warn!("Shutting down.");
   std::process::exit(1);
 }
