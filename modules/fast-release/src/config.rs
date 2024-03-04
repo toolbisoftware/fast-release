@@ -28,7 +28,7 @@ enum ConfigBranchEnum {
 }
 
 // TODO Add the settings inside of each of the declared modules for simplicity.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ConfigProject {
   name: String,
   path: String,
@@ -47,6 +47,10 @@ struct RawConfig {
 #[derive(Debug, Clone)]
 pub struct Config {
   version: u8,
+  modules: Vec<String>,
+  pub branches: Vec<Branch>,
+  project: Option<ConfigProject>,
+  projects: Option<Vec<ConfigProject>>,
 }
 
 fn find_file() -> Result<PathBuf, FastReleaseError<'static>> {
@@ -73,8 +77,8 @@ fn find_file() -> Result<PathBuf, FastReleaseError<'static>> {
 
   for file_name in CONFIG_FILE_NAMES {
     for file_ext in CONFIG_FILE_EXTS {
-      let file_name = format!("{}.{}", file_name, file_ext);
-      let path = path.join(&file_name);
+      let file_name: String = format!("{}.{}", file_name, file_ext);
+      let path: PathBuf = path.join(&file_name);
 
       if fs::metadata(&path).is_ok() {
         debug!(
@@ -93,7 +97,7 @@ fn find_file() -> Result<PathBuf, FastReleaseError<'static>> {
   })
 }
 
-fn get_config(path: PathBuf) -> Result<Config, FastReleaseError<'static>> {
+fn get_config(path: PathBuf) -> Result<RawConfig, FastReleaseError<'static>> {
   let mut file: File = match std::fs::OpenOptions::new().read(true).open(path) {
     Ok(file) => file,
     Err(error) => {
@@ -112,7 +116,7 @@ fn get_config(path: PathBuf) -> Result<Config, FastReleaseError<'static>> {
     content
   };
 
-  let parse_content: Config = match serde_yaml::from_str(&content) {
+  let parse_content: RawConfig = match serde_yaml::from_str(&content) {
     Ok(content) => content,
     Err(_) => {
       return Err(FastReleaseError {
@@ -126,9 +130,61 @@ fn get_config(path: PathBuf) -> Result<Config, FastReleaseError<'static>> {
   Ok(parse_content)
 }
 
-pub fn get() -> Result<Config, FastReleaseError<'static>> {
-  let find_file = find_file()?;
-  let get_config = get_config(find_file)?;
+fn convert_branches(config_branches: Vec<ConfigBranchEnum>) -> Vec<Branch> {
+  if config_branches.len() == 0 {
+    throw_error(FastReleaseError {
+      message: "There are no branches on the configuration file.",
+      category: Some("CONFIG"),
+      error: None,
+    })
+  }
 
-  Ok(get_config)
+  let mut converted_branches: Vec<Branch> = Vec::new();
+  for branch in config_branches {
+    let _ = match branch {
+      ConfigBranchEnum::Simple(name) => converted_branches.push(Branch {
+        name,
+        pre_release: false,
+      }),
+      ConfigBranchEnum::WithProperties(properties) => {
+        for (name, branches) in properties {
+          for branch in branches {
+            let mut pre_release: bool = false;
+            if let Some(value) = branch.pre_release {
+              pre_release = value;
+            }
+
+            converted_branches.push(Branch {
+              name: name.to_owned(),
+              pre_release,
+            });
+
+            break;
+          }
+
+          break;
+        }
+      }
+    };
+  }
+
+  converted_branches
+}
+
+fn transform_config(raw_config: RawConfig) -> Config {
+  Config {
+    version: raw_config.version,
+    modules: raw_config.modules,
+    branches: convert_branches(raw_config.branches),
+    project: raw_config.project,
+    projects: raw_config.projects,
+  }
+}
+
+pub fn get() -> Result<Config, FastReleaseError<'static>> {
+  let find_file: PathBuf = find_file()?;
+  let get_config: RawConfig = get_config(find_file)?;
+  let transform_config: Config = transform_config(get_config);
+
+  Ok(transform_config)
 }
