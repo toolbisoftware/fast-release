@@ -3,10 +3,12 @@
 
 use crate::{
   constants::{CONFIG_FILE_EXTS, CONFIG_FILE_NAMES},
-  error::FastReleaseError,
+  error::{throw_error, FastReleaseError},
+  git::branch::Branch,
 };
 use serde::{Deserialize, Serialize};
 use std::{
+  collections::HashMap,
   fs::{self, File},
   io::{Error, Read},
   path::{Path, PathBuf},
@@ -14,6 +16,35 @@ use std::{
 use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ConfigBranch {
+  pre_release: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum ConfigBranchEnum {
+  Simple(String),
+  WithProperties(HashMap<String, Vec<ConfigBranch>>),
+}
+
+// TODO Add the settings inside of each of the declared modules for simplicity.
+#[derive(Debug, Serialize, Deserialize)]
+struct ConfigProject {
+  name: String,
+  path: String,
+  modules: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RawConfig {
+  version: u8,
+  modules: Vec<String>,
+  branches: Vec<ConfigBranchEnum>,
+  project: Option<ConfigProject>,
+  projects: Option<Vec<ConfigProject>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Config {
   version: u8,
 }
