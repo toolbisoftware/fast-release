@@ -2,3 +2,4 @@
 // Check the README file in the project root for more information.
 
 pub mod branch;
+pub mod repo;
