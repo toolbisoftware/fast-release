@@ -4,17 +4,16 @@
 use std::io::Error;
 use tracing::{error, warn};
 
-#[derive(Debug)]
-pub struct FastReleaseError<'a> {
-  pub message: &'a str,
-  pub category: Option<&'a str>,
+pub struct FastReleaseError {
+  pub message: String,
+  pub category: Option<String>,
   pub error: Option<Error>,
 }
 
-impl std::fmt::Display for FastReleaseError<'_> {
+impl std::fmt::Display for FastReleaseError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let message: String = format!("{}", self.message);
-    let error: String = if let Some(value) = &self.error {
+    let message = self.message;
+    let error = if let Some(value) = &self.error {
       format!("\n{}", value)
     } else {
       "".into()
@@ -24,9 +23,44 @@ impl std::fmt::Display for FastReleaseError<'_> {
   }
 }
 
-pub fn throw_error(error: FastReleaseError) {
-  error!("An error has occurred:");
+//
+
+pub struct FastReleaseErrorBuilder {
+  inner: FastReleaseError,
+}
+
+impl FastReleaseErrorBuilder {
+  pub fn new(message: &str) -> Self {
+    Self {
+      inner: FastReleaseError {
+        message: message.to_string(),
+        category: None,
+        error: None,
+      },
+    }
+  }
+
+  pub fn category(mut self, category: &str) -> Self {
+    self.inner.category = Some(category.to_string());
+    self
+  }
+
+  pub fn error(mut self, error: Error) -> Self {
+    self.inner.error = Some(error);
+    self
+  }
+
+  pub fn get(self) -> FastReleaseError {
+    self.inner
+  }
+}
+
+//
+
+pub fn soft_panic(error: FastReleaseError) {
+  error!("An error has occurred.");
   error!(message = error.message, category = error.category, error = ?error.error);
   warn!("Shutting down.");
+
   std::process::exit(1);
 }
