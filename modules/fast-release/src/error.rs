@@ -12,8 +12,8 @@ pub struct FastReleaseError {
 
 impl std::fmt::Display for FastReleaseError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let message = self.message;
-    let error = if let Some(value) = &self.error {
+    let message: &String = &self.message;
+    let error: String = if let Some(value) = &self.error {
       format!("\n{}", value)
     } else {
       "".into()
