@@ -58,6 +58,7 @@ pub fn get(env: &HashMap<String, String>) -> CiEnv {
     .job_url(job_url)
     .build(build)
     .build_url(build_url)
+    .is_ci(true)
     .is_pull_request(is_pull_request)
     .get()
 }
