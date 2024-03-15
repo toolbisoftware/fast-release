@@ -59,9 +59,7 @@ pub fn get() -> CiEnv {
   match service {
     CiServices::GitHub => services::github::get(&env),
     CiServices::GitLab => services::gitlab::get(&env),
-    CiServices::Git => {
-      todo!()
-    }
+    CiServices::Git => services::git::get(&env),
   }
 }
 
