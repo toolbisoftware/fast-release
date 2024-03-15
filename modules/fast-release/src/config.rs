@@ -1,6 +1,8 @@
 // Copyright (c) Toolbi Software. All rights reserved.
 // Check the README file in the project root for more information.
 
+// TODO Put the configuration for the modules inside the own modules
+
 use crate::{
   cli::CliParams,
   constants::{CONFIG_FILE_EXT, CONFIG_FILE_NAME, CONFIG_VERSION},
@@ -127,19 +129,21 @@ pub fn get_file(file_path: &Option<String>) -> Result<PathBuf, FastReleaseError>
 
         let path: PathBuf = base_path.join(&file_path);
         if fs::metadata(&path).is_ok() {
-          Some(path);
-        };
-
-        warn!(
-          message = format!(
-            "Couldn't find the custom configuration file '{}'.",
-            file_path
-          ),
-          category = "CONFIG"
-        );
+          debug!(
+            message = format!("Using the custom configuration file '{}'.", &file_path),
+            category = "CONFIG"
+          );
+          Some(path)
+        } else {
+          warn!(
+            message = "Couldn't find the custom configuration file.",
+            category = "CONFIG"
+          );
+          None
+        }
+      } else {
+        None
       }
-
-      None
     };
 
     let get_file: Option<PathBuf> = {
