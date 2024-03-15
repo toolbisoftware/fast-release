@@ -4,6 +4,7 @@
 use std::io::Error;
 use tracing::{error, warn};
 
+#[derive(Debug)]
 pub struct FastReleaseError {
   pub message: String,
   pub category: Option<String>,
