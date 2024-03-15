@@ -100,6 +100,7 @@ pub fn get(env: &HashMap<String, String>) -> CiEnv {
     .pull_request(pull_request)
     .pull_request_branch(pull_request_branch)
     .build(build)
+    .is_ci(true)
     .is_pull_request(is_pull_request)
     .get()
 }
