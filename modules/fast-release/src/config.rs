@@ -2,22 +2,21 @@
 // Check the README file in the project root for more information.
 
 use crate::{
-  cli::{self, CliParams},
-  constants::{CONFIG_FILE_EXTS, CONFIG_FILE_NAMES},
-  error::{throw_error, FastReleaseError},
-  git::branch::Branch,
+  cli::CliParams,
+  constants::{CONFIG_FILE_EXT, CONFIG_FILE_NAME, CONFIG_VERSION},
+  error::{FastReleaseError, FastReleaseErrorBuilder},
 };
 use serde::{Deserialize, Serialize};
 use std::{
   collections::HashMap,
-  fs::{self, File},
-  io::{Error, Read},
+  fs::{self, File, OpenOptions},
+  io::Read,
   path::{Path, PathBuf},
 };
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ConfigBranch {
+struct ConfigFileBranch {
   pre_release: Option<bool>,
 }
 
@@ -25,10 +24,17 @@ pub struct ConfigBranch {
 #[serde(untagged)]
 enum ConfigBranchEnum {
   Simple(String),
-  WithProperties(HashMap<String, Vec<ConfigBranch>>),
+  WithProperties(HashMap<String, Vec<ConfigFileBranch>>),
 }
 
-// TODO Add the settings inside of each of the declared modules for simplicity.
+#[derive(Debug, Clone)]
+pub struct ConfigBranch {
+  pub name: String,
+  pub pre_release: bool,
+}
+
+//
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigProject {
   name: String,
@@ -36,14 +42,15 @@ pub struct ConfigProject {
   modules: Vec<String>,
 }
 
+//
+
 #[derive(Debug, Serialize, Deserialize)]
-struct RawConfig {
+struct ConfigFile {
   version: u8,
   tag_format: String,
   modules: Vec<String>,
   branches: Vec<ConfigBranchEnum>,
-  project: Option<ConfigProject>,
-  projects: Option<Vec<ConfigProject>>,
+  projects: Vec<ConfigProject>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,167 +58,240 @@ pub struct Config {
   pub version: u8,
   pub tag_format: String,
   pub modules: Vec<String>,
-  pub branches: Vec<Branch>,
-  pub project: Option<ConfigProject>,
-  pub projects: Option<Vec<ConfigProject>>,
+  pub branches: Vec<ConfigBranch>,
+  pub projects: Vec<ConfigProject>,
   pub dry_run: bool,
 }
 
-fn find_file(path_override: Option<String>) -> Result<PathBuf, FastReleaseError<'static>> {
-  let path: PathBuf = std::env::current_exe().map_err(|error: Error| FastReleaseError {
-    message: "Failed to get the executable's path.",
-    category: Some("CONFIG"),
-    error: Some(error),
-  })?;
-  let path: &Path = match path.parent() {
-    Some(path) => path,
-    None => {
-      return Err(FastReleaseError {
-        message: "Failed to get the executable's directory.",
-        category: Some("CONFIG"),
-        error: None,
-      });
-    }
-  };
+fn find_file(base_path: &Path) -> Option<PathBuf> {
+  debug!(
+    message = "Trying to find a configuration file.",
+    category = "CONFIG"
+  );
 
-  if let Some(path_override) = path_override {
-    let path = path.join(&path_override);
+  let mut files_found: u8 = 0;
+  let mut file: Option<(String, PathBuf)> = None;
 
-    if fs::metadata(&path).is_ok() {
-      debug!(
-        category = "CONFIG",
-        message = format!("Found the configuration file '{}'.", path_override)
-      );
-      return Ok(path.into());
-    }
+  for file_name in CONFIG_FILE_NAME {
+    for file_ext in CONFIG_FILE_EXT {
+      let file_name: String = format!("{}.{}", file_name, file_ext);
+      let path: PathBuf = base_path.join(&file_name);
 
-    Err(FastReleaseError {
-      message: "Couldn't find the configuration file.",
-      category: Some("CONFIG"),
-      error: None,
-    })
-  } else {
-    debug!(
-      category = "CONFIG",
-      message = "Trying to find a configuration file."
-    );
-
-    for file_name in CONFIG_FILE_NAMES {
-      for file_ext in CONFIG_FILE_EXTS {
-        let file_name: String = format!("{}.{}", file_name, file_ext);
-        let path: PathBuf = path.join(&file_name);
-
-        if fs::metadata(&path).is_ok() {
-          debug!(
-            category = "CONFIG",
-            message = format!("Found the configuration file '{}'.", file_name)
-          );
-          return Ok(path.into());
+      if fs::metadata(&path).is_ok() {
+        if files_found == 0 {
+          file = Some((file_name, path));
         }
+        files_found = files_found + 1;
       }
     }
+  }
 
-    Err(FastReleaseError {
-      message: "Couldn't find a configuration file.",
-      category: Some("CONFIG"),
-      error: None,
-    })
+  if files_found > 0 {
+    let file: (String, PathBuf) = file.unwrap();
+
+    if files_found > 1 {
+      warn!(
+        message = format!(
+          "Found more than one configuration file. Using '{}'.",
+          file.0
+        ),
+        category = "CONFIG"
+      )
+    } else if files_found == 1 {
+      debug!(
+        message = format!("Using the configuration file '{}'.", file.0),
+        category = "CONFIG"
+      );
+    }
+
+    return Some(file.1);
+  }
+
+  None
+}
+
+pub fn get_file(file_path: &Option<String>) -> Result<PathBuf, FastReleaseError> {
+  let exe_path: PathBuf = std::env::current_exe().unwrap();
+  let base_path: &Path = exe_path.parent().unwrap();
+
+  let file: Option<PathBuf> = {
+    let get_file: Option<PathBuf> = {
+      if let Some(file_path) = file_path {
+        debug!(
+          message = format!(
+            "Trying to find the custom configuration file '{}'.",
+            file_path
+          ),
+          category = "CONFIG"
+        );
+
+        let path: PathBuf = base_path.join(&file_path);
+        if fs::metadata(&path).is_ok() {
+          Some(path);
+        };
+
+        warn!(
+          message = format!(
+            "Couldn't find the custom configuration file '{}'.",
+            file_path
+          ),
+          category = "CONFIG"
+        );
+      }
+
+      None
+    };
+
+    let get_file: Option<PathBuf> = {
+      if get_file.is_none() {
+        find_file(base_path)
+      } else {
+        get_file
+      }
+    };
+
+    get_file
+  };
+
+  match file {
+    Some(file) => Ok(file),
+    None => Err(
+      FastReleaseErrorBuilder::new("Couldn't find a configuration file.")
+        .category("CONFIG")
+        .get(),
+    ),
   }
 }
 
-fn get_config(path: PathBuf) -> Result<RawConfig, FastReleaseError<'static>> {
-  let mut file: File = match std::fs::OpenOptions::new().read(true).open(path) {
+fn read_file(file_path: PathBuf) -> Result<ConfigFile, FastReleaseError> {
+  let mut file: File = match OpenOptions::new().read(true).open(file_path) {
     Ok(file) => file,
     Err(error) => {
-      return Err(FastReleaseError {
-        message: "Failed to open the configuration file.",
-        category: Some("CONFIG"),
-        error: Some(error),
-      })
+      return Err(
+        FastReleaseErrorBuilder::new("Failed to open the configuration file.")
+          .category("CONFIG")
+          .error(error)
+          .get(),
+      )
     }
   };
 
   let content: String = {
-    let mut content: String = String::new();
-    let _ = file.read_to_string(&mut content);
-
-    content
+    let mut data: String = String::new();
+    let _ = file.read_to_string(&mut data);
+    data
   };
 
-  let parse_content: RawConfig = match serde_yaml::from_str(&content) {
+  let parse: ConfigFile = match serde_yaml::from_str(&content) {
     Ok(content) => content,
     Err(_) => {
-      return Err(FastReleaseError {
-        message: "Failed to parse the configuration file.",
-        category: Some("CONFIG"),
-        error: None, // ! Why, serde? Why?
-      });
+      return Err(
+        FastReleaseErrorBuilder::new(
+          "Failed to parse the configuration file. The file might be wrongly formatted.",
+        )
+        .category("CONFIG")
+        .get(),
+      );
     }
   };
 
-  Ok(parse_content)
+  Ok(parse)
 }
 
-fn convert_branches(config_branches: Vec<ConfigBranchEnum>) -> Vec<Branch> {
-  if config_branches.len() == 0 {
-    throw_error(FastReleaseError {
-      message: "There are no branches on the configuration file.",
-      category: Some("CONFIG"),
-      error: None,
-    })
+fn validate_and_transform_config(
+  file_config: ConfigFile,
+  cli_params: &CliParams,
+) -> Result<Config, FastReleaseError> {
+  fn version(version: u8) -> u8 {
+    if version != CONFIG_VERSION {
+      // TODO Handle outdated configuration files
+      warn!(
+        message = "The configuration file is on version '{}'. It should be on version '{}'.",
+        category = "CONFIG"
+      )
+    }
+
+    version
   }
 
-  let mut converted_branches: Vec<Branch> = Vec::new();
-  for branch in config_branches {
-    let _ = match branch {
-      ConfigBranchEnum::Simple(name) => converted_branches.push(Branch {
-        name,
-        pre_release: false,
-      }),
-      ConfigBranchEnum::WithProperties(properties) => {
-        for (name, branches) in properties {
-          for branch in branches {
-            let mut pre_release: bool = false;
-            if let Some(value) = branch.pre_release {
-              pre_release = value;
+  // TODO Handle tag format
+  fn tag_format(tag_format: String) -> String {
+    tag_format
+  }
+
+  // TODO Handle modules
+  fn modules(modules: Vec<String>) -> Vec<String> {
+    modules
+  }
+
+  fn branches(branches: Vec<ConfigBranchEnum>) -> Result<Vec<ConfigBranch>, FastReleaseError> {
+    if branches.len() == 0 {
+      return Err(
+        FastReleaseErrorBuilder::new(
+          "There are no branches on the configuration file. There must be at least one.",
+        )
+        .category("CONFIG")
+        .get(),
+      );
+    }
+
+    let mut result: Vec<ConfigBranch> = Vec::new();
+    for branch in branches {
+      match branch {
+        ConfigBranchEnum::Simple(name) => result.push(ConfigBranch {
+          name,
+          pre_release: false,
+        }),
+        ConfigBranchEnum::WithProperties(properties) => {
+          for (name, branches) in properties {
+            for branch in branches {
+              result.push(ConfigBranch {
+                name,
+                pre_release: branch.pre_release.unwrap_or(false),
+              });
+              break;
             }
-
-            converted_branches.push(Branch {
-              name: name.to_owned(),
-              pre_release,
-            });
-
             break;
           }
-
-          break;
         }
       }
-    };
+    }
+
+    Ok(result)
   }
 
-  converted_branches
-}
+  fn projects(projects: Vec<ConfigProject>) -> Result<Vec<ConfigProject>, FastReleaseError> {
+    if projects.len() == 0 {
+      return Err(
+        FastReleaseErrorBuilder::new(
+          "There are no projects on the configuration file. There must be at least one.",
+        )
+        .category("CONFIG")
+        .get(),
+      );
+    }
 
-fn transform_config(raw_config: RawConfig, cli_params: CliParams) -> Config {
-  let dry_run: bool = cli_params.dry_run;
-
-  Config {
-    version: raw_config.version,
-    tag_format: raw_config.tag_format,
-    modules: raw_config.modules,
-    branches: convert_branches(raw_config.branches),
-    project: raw_config.project,
-    projects: raw_config.projects,
-    dry_run,
+    Ok(projects)
   }
+
+  fn dry_run(dry_run: bool) -> bool {
+    dry_run
+  }
+
+  Ok(Config {
+    version: version(file_config.version),
+    tag_format: tag_format(file_config.tag_format),
+    modules: modules(file_config.modules),
+    branches: branches(file_config.branches)?,
+    projects: projects(file_config.projects)?,
+    dry_run: dry_run(cli_params.dry_run),
+  })
 }
 
-pub fn get() -> Result<Config, FastReleaseError<'static>> {
-  let get_cli_params: CliParams = cli::get();
-  let find_file: PathBuf = find_file(get_cli_params.config_file_path.clone())?;
-  let get_config: RawConfig = get_config(find_file)?;
-  let transform_config: Config = transform_config(get_config, get_cli_params);
+pub fn get(cli_params: &CliParams) -> Result<Config, FastReleaseError> {
+  let get_file: PathBuf = get_file(&cli_params.config_file_path)?;
+  let read_file: ConfigFile = read_file(get_file)?;
+  let config: Config = validate_and_transform_config(read_file, cli_params)?;
 
-  Ok(transform_config)
+  Ok(config)
 }
