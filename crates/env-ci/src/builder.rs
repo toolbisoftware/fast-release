@@ -24,7 +24,7 @@ impl CiEnvBuilder {
         job_url: None,
         build: None,
         build_url: None,
-        is_ci: true,
+        is_ci: false,
         is_pull_request: false,
       },
     }
