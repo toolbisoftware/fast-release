@@ -37,6 +37,7 @@ pub struct CiEnv {
   pub build: Option<String>,
   pub build_url: Option<String>,
   //
+  pub is_ci: bool,
   pub is_pull_request: bool,
 }
 
