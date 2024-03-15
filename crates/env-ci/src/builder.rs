@@ -9,7 +9,7 @@ pub struct CiEnvBuilder {
 
 impl CiEnvBuilder {
   pub fn new(name: &str, service: CiServices) -> Self {
-    CiEnvBuilder {
+    Self {
       inner: CiEnv {
         name: name.to_string(),
         service,
