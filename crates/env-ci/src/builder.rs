@@ -24,6 +24,7 @@ impl CiEnvBuilder {
         job_url: None,
         build: None,
         build_url: None,
+        is_ci: true,
         is_pull_request: false,
       },
     }
@@ -81,6 +82,11 @@ impl CiEnvBuilder {
 
   pub fn build_url(mut self, build_url: Option<String>) -> Self {
     self.inner.build_url = build_url;
+    self
+  }
+
+  pub fn is_ci(mut self, is_ci: bool) -> Self {
+    self.inner.is_ci = is_ci;
     self
   }
 
