@@ -8,24 +8,24 @@ use tracing::warn;
 
 #[derive(Debug)]
 pub struct CliParams {
-  pub dry_run: bool,
   pub config_file_path: Option<String>,
+  pub dry_run: bool,
 }
 
 pub fn get() -> CliParams {
   let clap: ArgMatches = Command::new("FastRelease CLI") /* .about("") */
+    .arg(
+      Arg::new("config_file_path")
+        .long("config")
+        .short('c')
+        .help("Sets the path to a custom configuration file"),
+    )
     .arg(
       Arg::new("dry_run")
         .long("dry")
         .short('d')
         .action(ArgAction::SetTrue)
         .help("Disables release publishing"),
-    )
-    .arg(
-      Arg::new("config_file_path")
-        .long("config")
-        .short('c')
-        .help("Sets the path to a custom configuration file"),
     )
     .get_matches();
 
