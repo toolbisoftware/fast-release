@@ -1,7 +1,6 @@
 // Copyright (c) Toolbi Software. All rights reserved.
 // Check the README file in the project root for more information.
 
-use super::Service;
 use crate::{
   builder::CiEnvBuilder,
   util::{env_var_exists, get_env_var},
@@ -56,51 +55,46 @@ fn get_pull_request_event(env: &HashMap<String, String>) -> PullRequestEvent {
   PullRequestEvent { ref_val, id }
 }
 
-struct GitHub;
+pub fn detect(env: &HashMap<String, String>) -> bool {
+  env_var_exists(env, "GITHUB_ACTIONS")
+}
 
-impl Service for GitHub {
-  fn detect(env: &HashMap<String, String>) -> bool {
-    env_var_exists(env, "GITHUB_ACTIONS")
-  }
+pub fn get(env: &HashMap<String, String>) -> CiEnv {
+  let github_event_name: Option<String> = get_env_var(env, "GITHUB_EVENT_NAME");
+  let pull_request_event: PullRequestEvent = get_pull_request_event(env);
+  let pre_ref: Option<String> = pull_request_event.ref_val;
+  let pre_id: Option<String> = pull_request_event.id;
 
-  fn get(env: &HashMap<String, String>) -> CiEnv {
-    let github_event_name: Option<String> = get_env_var(env, "GITHUB_EVENT_NAME");
-    let pull_request_event: PullRequestEvent = get_pull_request_event(env);
-    let pre_ref: Option<String> = pull_request_event.ref_val;
-    let pre_id: Option<String> = pull_request_event.id;
+  let branch: Option<String> = {
+    let name: Option<String> = pre_ref.or_else(|| {
+      github_event_name
+        .as_ref()
+        .filter(|&name| name == "pull_request_target")
+        .and_then(|_| pre_id.as_ref())
+        .map(|pid: &String| format!("refs/pull/{}/merge", pid))
+        .or_else(|| get_env_var(env, "GITHUB_REF"))
+    });
 
-    let branch: Option<String> = {
-      let name: Option<String> = pre_ref.or_else(|| {
-        github_event_name
-          .as_ref()
-          .filter(|&name| name == "pull_request_target")
-          .and_then(|_| pre_id.as_ref())
-          .map(|pid: &String| format!("refs/pull/{}/merge", pid))
-          .or_else(|| get_env_var(env, "GITHUB_REF"))
-      });
+    name.and_then(|v: String| parse_branch(&v)).or_else(|| None)
+  };
 
-      name.and_then(|v: String| parse_branch(&v)).or_else(|| None)
-    };
+  let pull_request: Option<String> = pre_id;
 
-    let pull_request: Option<String> = pre_id;
+  let is_pull_request: bool = github_event_name
+    .map(|v: String| v == "pull_request" || v == "pull_request_target")
+    .unwrap_or(false);
 
-    let is_pull_request: bool = github_event_name
-      .map(|v: String| v == "pull_request" || v == "pull_request_target")
-      .unwrap_or(false);
+  let pull_request_branch: Option<String> = is_pull_request.then(|| branch.clone()).unwrap_or(None);
 
-    let pull_request_branch: Option<String> =
-      is_pull_request.then(|| branch.clone()).unwrap_or(None);
-
-    CiEnvBuilder::new("GitHub Actions", CiServices::GitHub)
-      .slug(get_env_var(env, "GITHUB_REPOSITORY"))
-      .root(get_env_var(env, "GITHUB_WORKSPACE"))
-      .commit(get_env_var(env, "GITHUB_SHA"))
-      .branch(branch)
-      .pull_request(pull_request)
-      .pull_request_branch(pull_request_branch)
-      .build(get_env_var(env, "GITHUB_RUN_ID"))
-      .is_ci(true)
-      .is_pull_request(is_pull_request)
-      .get()
-  }
+  CiEnvBuilder::new("GitHub Actions", CiServices::GitHub)
+    .slug(get_env_var(env, "GITHUB_REPOSITORY"))
+    .root(get_env_var(env, "GITHUB_WORKSPACE"))
+    .commit(get_env_var(env, "GITHUB_SHA"))
+    .branch(branch)
+    .pull_request(pull_request)
+    .pull_request_branch(pull_request_branch)
+    .build(get_env_var(env, "GITHUB_RUN_ID"))
+    .is_ci(true)
+    .is_pull_request(is_pull_request)
+    .get()
 }
