@@ -4,7 +4,8 @@
 // TODO Add automatic tests
 // TODO Test everything
 // TODO Add more services
-// TODO Add internal documentation
+// TODO Add in-code documentation
+// TODO Add the essential traits for the exported structs
 
 mod builder;
 mod services;
@@ -12,12 +13,14 @@ mod util;
 
 use std::{collections::HashMap, env};
 
+#[derive(Debug)]
 pub enum CiServices {
   Git,
   GitHub,
   GitLab,
 }
 
+#[derive(Debug)]
 pub struct CiEnv {
   pub name: String,
   pub service: CiServices,
@@ -60,13 +63,5 @@ pub fn get() -> CiEnv {
     CiServices::GitHub => services::github::get(&env),
     CiServices::GitLab => services::gitlab::get(&env),
     CiServices::Git => services::git::get(&env),
-  }
-}
-
-pub fn get_service(service: &CiServices) -> String {
-  match service {
-    CiServices::Git => "git".into(),
-    CiServices::GitHub => "github".into(),
-    CiServices::GitLab => "gitlab".into(),
   }
 }
