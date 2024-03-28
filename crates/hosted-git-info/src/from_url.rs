@@ -1,14 +1,50 @@
 // Copyright (c) Toolbi Software. All rights reserved.
 // Check the README file in the project root for more information.
 
-use crate::{parse::parse, Protocol, ProtocolType};
+use crate::{
+  parse::parse,
+  protocol::{Protocol, ProtocolType},
+};
 use std::{collections::HashMap, io::Error};
+use url::Url;
 
 pub struct FromUrl {
   url: String,
   no_commitish: bool,
   no_git_plus: bool,
 }
+
+struct FromUrlBuilder {
+  inner: FromUrl,
+}
+
+impl FromUrlBuilder {
+  pub fn new(url: &str) -> Self {
+    Self {
+      inner: FromUrl {
+        url: url.to_string(),
+        no_commitish: false,
+        no_git_plus: false,
+      },
+    }
+  }
+
+  pub fn no_commitish(mut self, value: bool) -> Self {
+    self.inner.no_commitish = value;
+    self
+  }
+
+  pub fn no_git_plus(mut self, value: bool) -> Self {
+    self.inner.no_git_plus = value;
+    self
+  }
+
+  pub fn get(self) -> FromUrl {
+    self.inner
+  }
+}
+
+//
 
 fn is_github_shorthand(url: &str) -> bool {
   let at_idx: Option<usize> = url.find('@');
