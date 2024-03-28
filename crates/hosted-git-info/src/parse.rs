@@ -1,7 +1,7 @@
 // Copyright (c) Toolbi Software. All rights reserved.
 // Check the README file in the project root for more information.
 
-use crate::{util::str_to_protocol, Protocol, ProtocolType};
+use crate::protocol::{self, Protocol, ProtocolType};
 use std::{
   collections::HashMap,
   io::{Error, ErrorKind},
@@ -20,7 +20,7 @@ fn correct_protocol(
 ) -> Result<String, Error> {
   if let Some(colon_idx) = url.find(':') {
     let protocol_str: &str = &url[..=colon_idx];
-    let protocol: ProtocolType = str_to_protocol(protocol_str)
+    let protocol: ProtocolType = protocol::type_from_str(protocol_str)
       .ok_or_else(|| Error::new(ErrorKind::Other, "Invalid protocol."))?;
     if protocols.contains_key(&protocol) {
       return Ok(url.to_string());
